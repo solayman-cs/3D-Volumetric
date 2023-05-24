@@ -1,0 +1,250 @@
+------------------------------------------------
+
+# Interative Slider (Input: Nifti File)
+
+import time
+import numpy as np
+import nibabel as nib
+
+
+# Load Nifti file and extract volume data
+nifti = nib.load("076.nii")
+volume = np.array(nifti.get_fdata())
+
+
+r, c, nb_frames = volume.shape
+height = (nb_frames-1) / 10
+grid = np.linspace(0, height, nb_frames)
+slice_step = grid[1] - grid[0]
+
+print(height)
+print(slice_step)
+
+# Define frames
+import plotly.graph_objects as go
+
+fig = go.Figure(frames=[go.Frame(data=go.Surface(
+    z=(height - k * slice_step) * np.ones((r, c)),
+    surfacecolor=np.flipud(volume[:, :, nb_frames - k - 1]),
+    cmin=-7, cmax=7
+    ),
+    name=str(k) # you need to name the frame for the animation to behave properly
+    )
+    for k in range(nb_frames)])
+
+
+# Add data to be displayed before animation starts
+fig.add_trace(go.Surface(
+    z=height * np.ones((r, c)),
+    surfacecolor=np.flipud(volume[:, :, nb_frames - 1]),
+    colorscale='Plotly3',
+    cmin=-7, cmax=7,
+    colorbar=dict(thickness=20, ticklen=4)
+    ))
+
+
+def frame_args(duration):
+    return {
+            "frame": {"duration": duration},
+            "mode": "immediate",
+            "fromcurrent": True,
+            "transition": {"duration": duration, "easing": "linear"},
+        }
+
+sliders = [
+            {
+                "pad": {"b": 10, "t": 60},
+                "len": 0.9,
+                "x": 0.1,
+                "y": 0,
+                "steps": [
+                    {
+                        "args": [[f.name], frame_args(0)],
+                        "label": "Slice::"+" "+str(k),
+                        "method": "animate",
+                    }
+                    for k, f in enumerate(fig.frames)
+                ],
+                
+               
+            }
+        ]
+
+# Layout
+fig.update_layout(
+         title='Slices in volumetric data',
+         width=600,
+         height=600,
+         scene=dict(
+                    zaxis=dict(range=[-0.1, 6.8], autorange=False),
+                    aspectratio=dict(x=1, y=1, z=1),
+                    ),
+         updatemenus = [
+            {
+                "buttons": [
+                    {
+                        "args": [None, frame_args(50)],
+                        "label": "&#9654;", # play symbol
+                        "method": "animate",
+                    },
+                    {
+                        "args": [[None], frame_args(0)],
+                        "label": "&#9724;", # pause symbol
+                        "method": "animate",
+                    },
+                ],
+                "direction": "left",
+                "pad": {"r": 10, "t": 70},
+                "type": "buttons",
+                "x": 0.1,
+                "y": 0,
+            }
+         ],
+         sliders=sliders
+)
+
+
+
+fig.show()
+
+
+---------------------------------------------------------
+
+
+# Blackish transparent with red (input: images)
+
+import os
+import re
+import plotly.graph_objs as go
+from PIL import Image
+import numpy as np
+
+# Set path to folder containing images
+folder_path = "masks"
+
+# Define target size for resizing
+target_size = (256, 256)
+
+# Define the size of the space between slices
+slice_spacing = 1.0
+
+# Define threshold value for identifying defect
+threshold = 200
+
+# Define color for the defect region
+defect_color = 'red'
+
+# Get list of image filenames and sort them in numerical order
+file_list = os.listdir(folder_path)
+file_list.sort(key=lambda x: int(re.findall(r'\d+', x)[0]))
+
+# Create list of surfaces for each slice
+surfaces = []
+for i, file_name in enumerate(file_list):
+    # Load image and resize to target size
+    im = Image.open(os.path.join(folder_path, file_name)).resize(target_size)
+
+    # Create binary mask of defect region
+    mask = np.array(im.convert('L')) < threshold
+
+    # Create surface for current slice
+    r, c = im.size
+    surface = go.Surface(
+        z=i * slice_spacing * np.ones((r, c)),
+        surfacecolor=np.flipud(np.array(im.convert('L'))),
+        cmin=0,
+        cmax=255,
+        showscale=False,
+        colorscale=[[0, "black"], [1, defect_color]],  # Use custom colorscale with red for defect area
+        opacity=0.3  # Change opacity to a float value
+    )
+
+    surfaces.append(surface)
+
+# Create figure and add surfaces
+fig = go.Figure(data=surfaces)
+
+# Set layout and axis labels
+fig.update_layout(
+    title='CT Slices Stacked in Z-axis',
+    scene=dict(
+        xaxis_title='X',
+        yaxis_title='Y',
+        zaxis_title='Z',
+        aspectratio=dict(x=1, y=1, z=1)
+    )
+)
+
+# Show figure
+fig.show()
+
+------------------------------------------------------
+
+
+# FUll Transparent with red (input: images)
+
+import os
+import re
+import plotly.graph_objs as go
+from PIL import Image
+import numpy as np
+
+# Set path to folder containing images
+folder_path = "masks"
+
+# Define target size for resizing
+target_size = (256, 256)
+
+# Define the size of the space between slices
+slice_spacing = 1.0
+
+# Define threshold value for identifying defect
+threshold = 200
+
+# Define color for the defect region
+defect_color = 'red'
+
+# Get list of image filenames and sort them in numerical order
+file_list = os.listdir(folder_path)
+file_list.sort(key=lambda x: int(re.findall(r'\d+', x)[0]))
+
+# Create list of surfaces for each slice
+surfaces = []
+for i, file_name in enumerate(file_list):
+    # Load image and resize to target size
+    im = Image.open(os.path.join(folder_path, file_name)).resize(target_size)
+
+    # Create binary mask of defect region
+    mask = np.array(im.convert('L')) < threshold
+
+    # Create surface for current slice with only the defect region and set the non-defect region to be transparent
+    r, c = im.size
+    surface = go.Surface(
+        z=i * slice_spacing * np.ones((r, c)),
+        surfacecolor=np.ma.masked_array(np.flipud(np.array(im)), np.invert(mask)),
+        cmin=0,
+        cmax=255,
+        showscale=False,
+        colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'red']],  # Use custom colorscale with red for defect area
+        opacity=0.8  # Change opacity to a float value
+    )
+
+    surfaces.append(surface)
+
+# Create figure and add surfaces
+fig = go.Figure(data=surfaces)
+
+# Set layout and axis labels
+fig.update_layout(
+    title='CT Slices Stacked in Z-axis',
+    scene=dict(
+        xaxis_title='X',
+        yaxis_title='Y',
+        zaxis_title='Z',
+        aspectratio=dict(x=1, y=1, z=1)
+    )
+)
+
+# Show figure
+fig.show()
+--------------------------------------
